@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -27,6 +28,15 @@ import (
 )
 
 // consul structs
+type ConsulEntry struct {
+	CreateIndex int64  `json:"CreateIndex"`
+	ModifyIndex int64  `json:"ModifyIndex"`
+	LockIndex   int64  `json:"LockIndex"`
+	Key         string `json:"Key"`
+	Flags       int64  `json:"Flags"`
+	Value       string `json:"Value"`
+}
+
 type ConsulServiceEntry struct {
 	Node           string
 	Address        string
@@ -74,12 +84,42 @@ func main() {
 
 func buildVipConf(vipName string) {
 	//	fmt.Printf("getting	%s...\n", vipName)
-	res, err := http.Get("http://" + *consulHost + "/v1/catalog/service/" + vipName)
+	// get haproxy port info
+	var haport string
+	res, err := http.Get("http://" + *consulHost + "/v1/kv/haportinfo/" + vipName)
 	if err != nil {
 		fmt.Println("Error getting consul list: ", err)
 	}
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Error reading body: ", err)
+	}
+
+	var consulPortRes []ConsulEntry
+	err = json.Unmarshal(body, &consulPortRes)
+	if err != nil {
+		fmt.Println("Error unmarshaling JSON: ", err)
+	}
+	if len(consulPortRes) > 0 {
+		if consulPortRes[0].Value == "" {
+			haport = "666"
+		} else {
+			haportByte, err := base64.StdEncoding.DecodeString(consulPortRes[0].Value)
+			if err != nil {
+				fmt.Println("Error converting base64 value: ", err)
+			}
+			haport = string(haportByte)
+		}
+	} else {
+		haport = "666"
+	}
+	res, err = http.Get("http://" + *consulHost + "/v1/catalog/service/" + vipName)
+	if err != nil {
+		fmt.Println("Error getting consul list: ", err)
+	}
+	defer res.Body.Close()
+	body, err = ioutil.ReadAll(res.Body)
 	if err != nil {
 		fmt.Println("Error reading body: ", err)
 	}
@@ -90,7 +130,7 @@ func buildVipConf(vipName string) {
 		fmt.Println("Error unmarshaling JSON: ", err)
 	}
 	//TODO get vip port from consul
-	confText.WriteString(`listen ` + vipName + ` 0.0.0.0:8080
+	confText.WriteString(`listen ` + vipName + ` 0.0.0.0:` + haport + `
   					mode http
   					stats enable
   					stats uri /haproxy?stats
