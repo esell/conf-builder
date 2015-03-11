@@ -70,7 +70,10 @@ func main() {
 
 	confText.WriteString(`defaults
 	  log     global
-	    mode    http` + "\n\n")
+	    mode    http
+		contimeout 5000
+		clitimeout 50000
+		srvtimeout 50000` + "\n\n")
 
 	resMap := consulRes.(map[string]interface{})
 	for key, _ := range resMap {
