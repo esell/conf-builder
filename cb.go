@@ -24,7 +24,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 )
 
 // consul structs
@@ -52,37 +55,26 @@ var confText bytes.Buffer
 
 func main() {
 	flag.Parse()
-	res, err := http.Get("http://" + *consulHost + "/v1/catalog/services")
-	if err != nil {
-		fmt.Println("Error getting consul list: ", err)
-	}
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	fmt.Printf("app query: %s\n", body)
-	if err != nil {
-		fmt.Println("Error reading body: ", err)
-	}
-	var consulRes interface{}
-	err = json.Unmarshal(body, &consulRes)
-	if err != nil {
-		fmt.Println("Error unmarshaling JSON: ", err)
-	}
 
-	confText.WriteString(`defaults
-	  log     global
-	    mode    http
-		contimeout 5000
-		clitimeout 50000
-		srvtimeout 50000` + "\n\n")
+	stopChan := make(chan bool)
+	doneChan := make(chan bool)
+	errChan := make(chan error, 10)
+	blahWatch := WatcherBuild(stopChan, doneChan, errChan)
 
-	resMap := consulRes.(map[string]interface{})
-	for key, _ := range resMap {
-		buildVipConf(key)
+	go blahWatch.Watch()
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	for {
+		select {
+		case err := <-errChan:
+			fmt.Println("Error: ", err)
+		case s := <-signalChan:
+			fmt.Printf("captured %v exiting...", s)
+			close(doneChan)
+		case <-doneChan:
+			os.Exit(0)
+		}
 	}
-	// get all hosts for red/black of each app
-
-	// write config
-	fmt.Println(confText.String())
 }
 
 func buildVipConf(vipName string) {
