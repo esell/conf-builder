@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os/exec"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -116,4 +119,92 @@ func buildConfig() {
 
 	// write config
 	fmt.Println(confText.String())
+	if err := ioutil.WriteFile("/tmp/cb.out", confText.Bytes(), 0644); err != nil {
+		fmt.Println("Unable to write temp config file: ", err)
+	}
+
+	err = exec.Command("diff", "/etc/haproxy/haproxy.cfg", "/tmp/cb.out").Run()
+	if err != nil {
+		if msg, ok := err.(*exec.ExitError); ok {
+			fmt.Printf("exit code: %v\n", msg.Sys().(syscall.WaitStatus).ExitStatus())
+			if msg.Sys().(syscall.WaitStatus).ExitStatus() == 1 {
+				copyAndRestart()
+			}
+		}
+
+	}
+}
+
+func buildVipConf(vipName string) {
+	//  fmt.Printf("getting %s...\n", vipName)
+	// get haproxy port info
+	var haport string
+	res, err := http.Get("http://" + *consulHost + "/v1/kv/haportinfo/" + vipName)
+	if err != nil {
+		fmt.Println("Error getting consul list: ", err)
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Error reading body: ", err)
+	}
+
+	var consulPortRes []ConsulEntry
+	err = json.Unmarshal(body, &consulPortRes)
+	if err != nil {
+		fmt.Println("Error unmarshaling JSON: ", err)
+	}
+	if len(consulPortRes) > 0 {
+		if consulPortRes[0].Value == "" {
+			haport = "666"
+		} else {
+			haportByte, err := base64.StdEncoding.DecodeString(consulPortRes[0].Value)
+			if err != nil {
+				fmt.Println("Error converting base64 value: ", err)
+			}
+			haport = string(haportByte)
+		}
+	} else {
+		haport = "666"
+	}
+	res, err = http.Get("http://" + *consulHost + "/v1/catalog/service/" + vipName)
+	if err != nil {
+		fmt.Println("Error getting consul list: ", err)
+	}
+	defer res.Body.Close()
+	body, err = ioutil.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println("Error reading body: ", err)
+	}
+
+	var consulRes []ConsulServiceEntry
+	err = json.Unmarshal(body, &consulRes)
+	if err != nil {
+		fmt.Println("Error unmarshaling JSON: ", err)
+	}
+	//TODO get vip port from consul
+	confText.WriteString(`listen ` + vipName + ` 0.0.0.0:` + haport + `
+                    mode http
+                    stats enable
+                    stats uri /haproxy?stats
+                    balance roundrobin
+                    option httpclose
+                    option forwardfor
+                    `)
+
+	for _, entry := range consulRes {
+		confText.WriteString("server " + entry.Node + " " + entry.Address + ":" + strconv.Itoa(entry.ServicePort) + " check\n")
+	}
+}
+
+func copyAndRestart() {
+	cmd := exec.Command("mv", "/tmp/cb.out", "/etc/haproxy/haproxy.cfg")
+	if err := cmd.Run(); err != nil {
+		fmt.Println("unable to copy new haproxy config ", err)
+	}
+
+	cmd = exec.Command("service", "haproxy", "reload")
+	if err := cmd.Run(); err != nil {
+		fmt.Println("unable to copy new haproxy config ", err)
+	}
 }

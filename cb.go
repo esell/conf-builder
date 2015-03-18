@@ -18,15 +18,10 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 )
 
@@ -74,67 +69,5 @@ func main() {
 		case <-doneChan:
 			os.Exit(0)
 		}
-	}
-}
-
-func buildVipConf(vipName string) {
-	//	fmt.Printf("getting	%s...\n", vipName)
-	// get haproxy port info
-	var haport string
-	res, err := http.Get("http://" + *consulHost + "/v1/kv/haportinfo/" + vipName)
-	if err != nil {
-		fmt.Println("Error getting consul list: ", err)
-	}
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println("Error reading body: ", err)
-	}
-
-	var consulPortRes []ConsulEntry
-	err = json.Unmarshal(body, &consulPortRes)
-	if err != nil {
-		fmt.Println("Error unmarshaling JSON: ", err)
-	}
-	if len(consulPortRes) > 0 {
-		if consulPortRes[0].Value == "" {
-			haport = "666"
-		} else {
-			haportByte, err := base64.StdEncoding.DecodeString(consulPortRes[0].Value)
-			if err != nil {
-				fmt.Println("Error converting base64 value: ", err)
-			}
-			haport = string(haportByte)
-		}
-	} else {
-		haport = "666"
-	}
-	res, err = http.Get("http://" + *consulHost + "/v1/catalog/service/" + vipName)
-	if err != nil {
-		fmt.Println("Error getting consul list: ", err)
-	}
-	defer res.Body.Close()
-	body, err = ioutil.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println("Error reading body: ", err)
-	}
-
-	var consulRes []ConsulServiceEntry
-	err = json.Unmarshal(body, &consulRes)
-	if err != nil {
-		fmt.Println("Error unmarshaling JSON: ", err)
-	}
-	//TODO get vip port from consul
-	confText.WriteString(`listen ` + vipName + ` 0.0.0.0:` + haport + `
-  					mode http
-  					stats enable
-  					stats uri /haproxy?stats
-  					balance roundrobin
-  					option httpclose
-  					option forwardfor
-					`)
-
-	for _, entry := range consulRes {
-		confText.WriteString("server " + entry.Node + " " + entry.Address + ":" + strconv.Itoa(entry.ServicePort) + " check\n")
 	}
 }
