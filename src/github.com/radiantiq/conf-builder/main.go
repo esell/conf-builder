@@ -18,10 +18,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
-	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 )
 
@@ -45,26 +48,44 @@ type ConsulServiceEntry struct {
 	ServicePort    int
 }
 
-var consulHost = flag.String("h", "", "coul host:port")
+type Conf struct {
+	StartCmd       string   `json:"haproxyStartCmd"`
+	StopCmd        string   `json:"haproxyStopCmd"`
+	VIPs           []string `json:"vips"`
+	ConsulHostPort string   `json:"consulHostPort"`
+}
+
+var configFile = flag.String("c", "conf.json", "config file location")
+var config = &Conf{}
+
 var confText bytes.Buffer
 
 func main() {
 	flag.Parse()
+	file, err := ioutil.ReadFile(*configFile)
+	if err != nil {
+		log.Panic("unable to read config file, exiting...")
+	}
+	config = &Conf{}
+	if err := json.Unmarshal(file, &config); err != nil {
+		log.Panic("unable to marshal config file, exiting...")
+	}
 
 	stopChan := make(chan bool)
 	doneChan := make(chan bool)
 	errChan := make(chan error, 10)
-	blahWatch := WatcherBuild(stopChan, doneChan, errChan)
+	var wg sync.WaitGroup
+	watcher := Watcher{StopChan: stopChan, DoneChan: doneChan, ErrorChan: errChan, Waitgroup: wg, Index: 0, Config: *config}
 
-	go blahWatch.Watch()
+	go watcher.Watch()
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	for {
 		select {
 		case err := <-errChan:
-			fmt.Println("Error: ", err)
+			log.Println("Error: ", err)
 		case s := <-signalChan:
-			fmt.Printf("captured %v exiting...", s)
+			log.Printf("captured %v exiting...", s)
 			close(doneChan)
 		case <-doneChan:
 			os.Exit(0)

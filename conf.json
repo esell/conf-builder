@@ -1,0 +1,6 @@
+{
+	"haproxyStartCmd": "service haproxy start",
+	"haproxyStopCmd": "service haproxy stop",
+	"vips":["test1","test2"],
+	"consulHostPort": "host:port"
+}
