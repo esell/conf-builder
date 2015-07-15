@@ -200,7 +200,7 @@ func (w *Watcher) buildConfig() {
 		if msg, ok := err.(*exec.ExitError); ok {
 			log.Printf("exit code: %v\n", msg.Sys().(syscall.WaitStatus).ExitStatus())
 			if msg.Sys().(syscall.WaitStatus).ExitStatus() == 1 {
-				//copyAndRestart()
+				copyAndRestart()
 			}
 		}
 
