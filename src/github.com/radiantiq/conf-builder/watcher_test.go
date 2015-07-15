@@ -1,3 +1,19 @@
+/*
+* Copyright 2015 Radiantiq
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+ */
+
 package main
 
 import (
@@ -28,7 +44,7 @@ func TestGetGlobals(t *testing.T) {
 	# For more information, see ciphers(1SSL).
 	ssl-default-bind-ciphers kEECDH+aRSA+AES:kRSA+AES:+AES256:RC4-SHA:!kEDH:!LOW:!EXP:!MD5:!aNULL:!eNULL`
 
-	mockConf := Conf{StartCmd: "start", StopCmd: "stop", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
+	mockConf := Conf{ReloadCmd: "stop", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
 	mockWatcher := Watcher{Index: 0, Config: mockConf}
 
 	s := buildMockServer()
@@ -51,7 +67,7 @@ timeout connect 5000
 timeout client  50000
 timeout server  50000`
 
-	mockConf := Conf{StartCmd: "start", StopCmd: "stop", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
+	mockConf := Conf{ReloadCmd: "stop", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
 	mockWatcher := Watcher{Index: 0, Config: mockConf}
 
 	s := buildMockServer()
@@ -69,7 +85,7 @@ timeout server  50000`
 
 func TestGetFrontendConf(t *testing.T) {
 
-	mockConf := Conf{StartCmd: "start", StopCmd: "stop", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
+	mockConf := Conf{ReloadCmd: "stop", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
 	mockWatcher := Watcher{Index: 0, Config: mockConf}
 
 	s := buildMockServer()
@@ -117,7 +133,7 @@ func TestGetFrontendConf(t *testing.T) {
 
 func TestGetBackendConf(t *testing.T) {
 
-	mockConf := Conf{StartCmd: "start", StopCmd: "stop", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
+	mockConf := Conf{ReloadCmd: "stop", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
 	mockWatcher := Watcher{Index: 0, Config: mockConf}
 
 	s := buildMockServer()
@@ -142,6 +158,30 @@ func TestGetBackendConf(t *testing.T) {
 
 	if res.ConfigType != "dynamic" {
 		t.Errorf("TestBackendConf failure, ConfigType does not match")
+	}
+
+	s.Close()
+}
+
+func TestGetRestartCmd(t *testing.T) {
+
+	mockConf := Conf{ReloadCmd: "service haproxy reload", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
+	mockWatcher := Watcher{Index: 0, Config: mockConf}
+
+	s := buildMockServer()
+	s.Start()
+	res := mockWatcher.getRestartCmd()
+	if res.Path != "service" {
+		t.Errorf("TestGetRestartCmd failure, Path does not match")
+	}
+	if len(res.Args) != 2 {
+		t.Errorf("TestGetRestartCmd failure, Args size is not correct")
+	}
+	if res.Args[0] != "haproxy" {
+		t.Errorf("TestGetRestartCmd failure, Args[0] does not match")
+	}
+	if res.Args[1] != "reload" {
+		t.Errorf("TestGetRestartCmd failure, Args[1] does not match")
 	}
 
 	s.Close()

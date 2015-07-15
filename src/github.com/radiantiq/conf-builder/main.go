@@ -49,8 +49,7 @@ type ConsulServiceEntry struct {
 }
 
 type Conf struct {
-	StartCmd       string   `json:"haproxyStartCmd"`
-	StopCmd        string   `json:"haproxyStopCmd"`
+	ReloadCmd      string   `json:"haproxyReloadCmd"`
 	VIPs           []string `json:"vips"`
 	ConsulHostPort string   `json:"consulHostPort"`
 }

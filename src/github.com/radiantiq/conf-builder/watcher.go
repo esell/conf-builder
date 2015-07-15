@@ -200,7 +200,7 @@ func (w *Watcher) buildConfig() {
 		if msg, ok := err.(*exec.ExitError); ok {
 			log.Printf("exit code: %v\n", msg.Sys().(syscall.WaitStatus).ExitStatus())
 			if msg.Sys().(syscall.WaitStatus).ExitStatus() == 1 {
-				copyAndRestart()
+				w.copyAndRestart()
 			}
 		}
 
@@ -310,14 +310,22 @@ func (w *Watcher) buildVipConf(vipName string) {
 	confText.WriteString("\n\n")
 }
 
-func copyAndRestart() {
+func (w *Watcher) copyAndRestart() {
 	cmd := exec.Command("mv", "/tmp/cb.out", "/etc/haproxy/haproxy.cfg")
 	if err := cmd.Run(); err != nil {
 		log.Println("unable to copy new haproxy config ", err)
 	}
 
-	cmd = exec.Command("service", "haproxy", "reload")
+	cmd = w.getRestartCmd()
 	if err := cmd.Run(); err != nil {
 		log.Println("unable to copy new haproxy config ", err)
 	}
+}
+
+func (w *Watcher) getRestartCmd() *exec.Cmd {
+	cmdSplits := strings.Split(w.Config.ReloadCmd, " ")
+	if len(cmdSplits) == 1 {
+		return &exec.Cmd{Path: cmdSplits[0]}
+	}
+	return &exec.Cmd{Path: cmdSplits[0], Args: cmdSplits[1:]}
 }
