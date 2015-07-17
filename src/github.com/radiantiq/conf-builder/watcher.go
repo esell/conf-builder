@@ -89,7 +89,22 @@ func (w *Watcher) getServiceIndex() error {
 		case e := <-errorChan:
 			return e
 		case index := <-respChan:
-			w.buildConfig()
+			buildErr := w.buildConfig()
+			if buildErr != nil {
+				return buildErr
+			}
+			buildErr = w.writeConfig()
+			if buildErr != nil {
+				return buildErr
+			}
+			buildErr = w.updateConfig()
+			if buildErr != nil {
+				return buildErr
+			}
+			buildErr = w.copyAndRestart()
+			if buildErr != nil {
+				return buildErr
+			}
 			w.Index = index
 			return nil
 		}
@@ -97,6 +112,7 @@ func (w *Watcher) getServiceIndex() error {
 
 	return nil
 }
+
 func (w *Watcher) getGlobalConfig() (globalConfig []byte, err error) {
 	res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/global")
 	if err != nil {
@@ -151,11 +167,11 @@ func (w *Watcher) getDefaultsConfig() (defaultsConfig []byte, err error) {
 	return defaultsConfig, nil
 }
 
-func (w *Watcher) buildConfig() {
+func (w *Watcher) buildConfig() error {
 	// get global
 	globalConf, err := w.getGlobalConfig()
 	if err != nil {
-		//TODO: do something
+		return err
 	}
 	confText.WriteString("global\n")
 	confText.WriteString(string(globalConf))
@@ -163,7 +179,7 @@ func (w *Watcher) buildConfig() {
 	// get defaults
 	defaultsConf, err := w.getDefaultsConfig()
 	if err != nil {
-		//TODO: do something
+		return err
 	}
 	confText.WriteString("defaults\n")
 	confText.WriteString(string(defaultsConf))
@@ -171,42 +187,55 @@ func (w *Watcher) buildConfig() {
 	// get all VIPs
 	res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/frontend/?keys&separator=/")
 	if err != nil {
-		log.Println("Error getting consul list: ", err)
+		log.Println("Error getting VIP list from consul: ", err)
+		// no VIPs returned but we have global/defaults we can write
+		return nil
 	}
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Println("Error reading body: ", err)
+		// no VIPs returned but we have global/defaults we can write
+		return nil
 	}
 	var consulRes []string
 	err = json.Unmarshal(body, &consulRes)
 	if err != nil {
 		log.Println("Error unmarshaling JSON: ", err)
+		// no VIPs returned but we have global/defaults we can write
+		return nil
 	}
 	// build VIP config
 	for _, val := range consulRes {
-
 		w.buildVipConf(filepath.Base(val))
 	}
 
+	return nil
+}
+func (w *Watcher) writeConfig() error {
 	// write config
 	log.Println(confText.String())
-	if err := ioutil.WriteFile("/tmp/cb.out", confText.Bytes(), 0644); err != nil {
+	if err := ioutil.WriteFile(w.Config.TempFile, confText.Bytes(), 0644); err != nil {
 		log.Println("Unable to write temp config file: ", err)
+		return err
 	}
+	return nil
+}
 
-	err = exec.Command("diff", "/etc/haproxy/haproxy.cfg", "/tmp/cb.out").Run()
+func (w *Watcher) updateConfig() error {
+	err := exec.Command("diff", w.Config.ConfigFile, w.Config.TempFile).Run()
 	if err != nil {
 		if msg, ok := err.(*exec.ExitError); ok {
 			log.Printf("exit code: %v\n", msg.Sys().(syscall.WaitStatus).ExitStatus())
 			if msg.Sys().(syscall.WaitStatus).ExitStatus() == 1 {
-				w.copyAndRestart()
+				return nil
 			}
 		}
 
 	}
-
+	return nil
 }
+
 func (w *Watcher) getFrontendConf(name string) Frontend {
 	// bindOptions
 	bindOptions := w.getConsulString("/v1/kv/apps/haproxy/frontend/" + name + "/bindOptions?raw")
@@ -310,16 +339,19 @@ func (w *Watcher) buildVipConf(vipName string) {
 	confText.WriteString("\n\n")
 }
 
-func (w *Watcher) copyAndRestart() {
-	cmd := exec.Command("mv", "/tmp/cb.out", "/etc/haproxy/haproxy.cfg")
+func (w *Watcher) copyAndRestart() error {
+	cmd := exec.Command("mv", w.Config.TempFile, w.Config.ConfigFile)
 	if err := cmd.Run(); err != nil {
 		log.Println("unable to copy new haproxy config ", err)
+		return err
 	}
 
 	cmd = w.getRestartCmd()
 	if err := cmd.Run(); err != nil {
-		log.Println("unable to copy new haproxy config ", err)
+		log.Println("unable to reload haproxy ", err)
+		return err
 	}
+	return nil
 }
 
 func (w *Watcher) getRestartCmd() *exec.Cmd {

@@ -52,6 +52,8 @@ type Conf struct {
 	ReloadCmd      string   `json:"haproxyReloadCmd"`
 	VIPs           []string `json:"vips"`
 	ConsulHostPort string   `json:"consulHostPort"`
+	ConfigFile     string   `json:"configFile"`
+	TempFile       string   `json:"tempFile"`
 }
 
 var configFile = flag.String("c", "conf.json", "config file location")

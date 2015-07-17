@@ -1,5 +1,7 @@
 {
 	"haproxyReloadCmd": "service haproxy reload",
 	"vips":["test1","test2"],
-	"consulHostPort": "host:port"
+	"consulHostPort": "host:port",
+	"configFile": "/etc/haproxy/haproxy.cfg",
+	"tempFile": "/tmp/cb.out"
 }
