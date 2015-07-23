@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -167,22 +168,26 @@ func TestGetBackendConf(t *testing.T) {
 
 func TestGetRestartCmd(t *testing.T) {
 
-	mockConf := Conf{ReloadCmd: "service haproxy reload", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
+	mockConf := Conf{ReloadCmd: "ls haproxy reload", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
 	mockWatcher := Watcher{Index: 0, Config: mockConf}
 
 	s := buildMockServer(false)
 	s.Start()
 	res := mockWatcher.getRestartCmd()
-	if res.Path != "service" {
+	filePath, err := exec.LookPath("ls")
+	if err != nil {
+		t.Errorf("it appears the ls command doesn't exist on your system so this test will fail")
+	}
+	if res.Path != filePath {
 		t.Errorf("TestGetRestartCmd failure, Path does not match")
 	}
-	if len(res.Args) != 2 {
+	if len(res.Args) != 3 {
 		t.Errorf("TestGetRestartCmd failure, Args size is not correct")
 	}
-	if res.Args[0] != "haproxy" {
+	if res.Args[0] != "ls" {
 		t.Errorf("TestGetRestartCmd failure, Args[0] does not match")
 	}
-	if res.Args[1] != "reload" {
+	if res.Args[1] != "haproxy" {
 		t.Errorf("TestGetRestartCmd failure, Args[1] does not match")
 	}
 

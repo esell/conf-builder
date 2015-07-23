@@ -65,6 +65,9 @@ func (w *Watcher) getServiceIndex() error {
 	// local chans for async GETs
 	respChan := make(chan uint64)
 	errorChan := make(chan error)
+
+	// clear out previous config
+	confText.Reset()
 	go func() {
 		res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/catalog/services?index=" + strconv.Itoa(int(w.Index)))
 
@@ -201,7 +204,7 @@ func (w *Watcher) buildConfig() error {
 	var consulRes []string
 	err = json.Unmarshal(body, &consulRes)
 	if err != nil {
-		log.Println("Error unmarshaling JSON: ", err)
+		log.Println("Error unmarshaling frontend list JSON: ", err)
 		// no VIPs returned but we have global/defaults we can write
 		return nil
 	}
@@ -332,7 +335,7 @@ func (w *Watcher) buildVipConf(vipName string) {
 		var consulRes []ConsulServiceEntry
 		err = json.Unmarshal(body, &consulRes)
 		if err != nil {
-			log.Println("Error unmarshaling JSON: ", err)
+			log.Println("Error unmarshaling service JSON: ", err)
 		}
 		for _, entry := range consulRes {
 			confText.WriteString("server " + entry.Node + " " + entry.Address + ":" + strconv.Itoa(entry.ServicePort) + " check\n")
@@ -349,19 +352,27 @@ func (w *Watcher) copyAndRestart() error {
 	}
 
 	cmd = w.getRestartCmd()
-	if err := cmd.Run(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil {
 		log.Println("unable to reload haproxy ", err)
+		log.Println("output: ", string(output))
 		return err
 	}
+	log.Println("output: ", string(output))
 	return nil
 }
 
 func (w *Watcher) getRestartCmd() *exec.Cmd {
 	cmdSplits := strings.Split(w.Config.ReloadCmd, " ")
-	if len(cmdSplits) == 1 {
-		return &exec.Cmd{Path: cmdSplits[0]}
+	path, err := exec.LookPath(cmdSplits[0])
+	if err != nil {
+		log.Printf("unable to find %s on the system\n", cmdSplits[0])
 	}
-	return &exec.Cmd{Path: cmdSplits[0], Args: cmdSplits[1:]}
+	if len(cmdSplits) == 1 {
+		return &exec.Cmd{Path: path}
+	}
+	returnCmd := exec.Cmd{Path: path, Args: cmdSplits[0:]}
+	return &returnCmd
 }
 
 func contains(s []string, e string) bool {
