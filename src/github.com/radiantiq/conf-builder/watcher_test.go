@@ -301,7 +301,7 @@ server 22c8fe2e391327e0380474c608841783863160cdad50ddc174490688f588537d 10.109.1
 
 `
 
-	mockConf := Conf{ReloadCmd: "service haproxy reload", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
+	mockConf := Conf{ReloadCmd: "service haproxy reload", VIPs: []string{"test", "test2"}, ConsulHostPort: "127.0.0.1:12424"}
 	mockWatcher := Watcher{Index: 0, Config: mockConf}
 
 	s := buildMockServer(false)

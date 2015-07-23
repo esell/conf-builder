@@ -28,34 +28,6 @@ import (
 	"syscall"
 )
 
-// consul structs
-type ConsulEntry struct {
-	CreateIndex int64  `json:"CreateIndex"`
-	ModifyIndex int64  `json:"ModifyIndex"`
-	LockIndex   int64  `json:"LockIndex"`
-	Key         string `json:"Key"`
-	Flags       int64  `json:"Flags"`
-	Value       string `json:"Value"`
-}
-
-type ConsulServiceEntry struct {
-	Node           string
-	Address        string
-	ServiceID      string
-	ServiceName    string
-	ServiceTags    []string
-	ServiceAddress string
-	ServicePort    int
-}
-
-type Conf struct {
-	ReloadCmd      string   `json:"haproxyReloadCmd"`
-	VIPs           []string `json:"vips"`
-	ConsulHostPort string   `json:"consulHostPort"`
-	ConfigFile     string   `json:"configFile"`
-	TempFile       string   `json:"tempFile"`
-}
-
 var configFile = flag.String("c", "conf.json", "config file location")
 var config = &Conf{}
 

@@ -207,7 +207,9 @@ func (w *Watcher) buildConfig() error {
 	}
 	// build VIP config
 	for _, val := range consulRes {
-		w.buildVipConf(filepath.Base(val))
+		if contains(w.Config.VIPs, filepath.Base(val)) {
+			w.buildVipConf(filepath.Base(val))
+		}
 	}
 
 	return nil
@@ -360,4 +362,13 @@ func (w *Watcher) getRestartCmd() *exec.Cmd {
 		return &exec.Cmd{Path: cmdSplits[0]}
 	}
 	return &exec.Cmd{Path: cmdSplits[0], Args: cmdSplits[1:]}
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
