@@ -188,7 +188,7 @@ func (w *Watcher) buildConfig() error {
 	confText.WriteString(string(defaultsConf))
 	confText.WriteString("\n\n")
 	// get all VIPs
-	res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/frontend/?keys&separator=/")
+	res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/backend/?keys&separator=/")
 	if err != nil {
 		log.Println("Error getting VIP list from consul: ", err)
 		// no VIPs returned but we have global/defaults we can write
@@ -211,6 +211,7 @@ func (w *Watcher) buildConfig() error {
 	// build VIP config
 	for _, val := range consulRes {
 		if contains(w.Config.VIPs, filepath.Base(val)) {
+			log.Println("building ", filepath.Base(val))
 			w.buildVipConf(filepath.Base(val))
 		}
 	}
@@ -288,60 +289,68 @@ func (w *Watcher) getConsulString(path string) string {
 
 func (w *Watcher) buildVipConf(vipName string) {
 	frontEndConf := w.getFrontendConf(vipName)
-	confText.WriteString(`frontend ` + vipName)
-	if !strings.HasSuffix(vipName, "\n") {
-		confText.WriteString("\n")
+	emptyFrontEnd := Frontend{BindOptions: "", ListenPort: "", Mode: "", StaticConf: ""}
+	if frontEndConf != emptyFrontEnd {
+		log.Println("getting frontend config for ", vipName)
+		confText.WriteString(`frontend ` + vipName)
+		if !strings.HasSuffix(vipName, "\n") {
+			confText.WriteString("\n")
+		}
+		confText.WriteString(`mode ` + frontEndConf.Mode)
+		if !strings.HasSuffix(frontEndConf.Mode, "\n") {
+			confText.WriteString("\n")
+		}
+		confText.WriteString(`bind 0.0.0.0:` + frontEndConf.ListenPort + ` ` + frontEndConf.BindOptions)
+		if !strings.HasSuffix(frontEndConf.BindOptions, "\n") {
+			confText.WriteString("\n")
+		}
+		confText.WriteString(frontEndConf.StaticConf)
+		if !strings.HasSuffix(frontEndConf.StaticConf, "\n") {
+			confText.WriteString("\n")
+		}
+		confText.WriteString(`default_backend ` + vipName + `-backend`)
+		confText.WriteString("\n\n")
 	}
-	confText.WriteString(`mode ` + frontEndConf.Mode)
-	if !strings.HasSuffix(frontEndConf.Mode, "\n") {
-		confText.WriteString("\n")
-	}
-	confText.WriteString(`bind 0.0.0.0:` + frontEndConf.ListenPort + ` ` + frontEndConf.BindOptions)
-	if !strings.HasSuffix(frontEndConf.BindOptions, "\n") {
-		confText.WriteString("\n")
-	}
-	confText.WriteString(frontEndConf.StaticConf)
-	if !strings.HasSuffix(frontEndConf.StaticConf, "\n") {
-		confText.WriteString("\n")
-	}
-	confText.WriteString(`default_backend ` + vipName + `-backend`)
-	confText.WriteString("\n\n")
 	backEndConf := w.getBackendConf(vipName)
-	confText.WriteString(`backend ` + vipName + `-backend`)
-	confText.WriteString("\n")
-	confText.WriteString(`mode ` + backEndConf.Mode)
-	if !strings.HasSuffix(backEndConf.Mode, "\n") {
+	emptyBackEnd := Backend{BalanceType: "", CatalogMapping: "", Mode: "", StaticConf: "", ConfigType: ""}
+	if backEndConf != emptyBackEnd {
+		log.Println("getting backend config for ", vipName)
+		confText.WriteString(`backend ` + vipName + `-backend`)
 		confText.WriteString("\n")
-	}
-	confText.WriteString(`balance ` + backEndConf.BalanceType)
-	if !strings.HasSuffix(backEndConf.BalanceType, "\n") {
-		confText.WriteString("\n")
-	}
-	confText.WriteString(backEndConf.StaticConf)
-	if !strings.HasSuffix(backEndConf.StaticConf, "\n") {
-		confText.WriteString("\n")
-	}
-	if backEndConf.ConfigType == "dynamic" {
-		res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/catalog/service/" + backEndConf.CatalogMapping)
-		if err != nil {
-			log.Println("Error getting consul list: ", err)
+		confText.WriteString(`mode ` + backEndConf.Mode)
+		if !strings.HasSuffix(backEndConf.Mode, "\n") {
+			confText.WriteString("\n")
 		}
-		defer res.Body.Close()
-		body, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			log.Println("Error reading body: ", err)
+		confText.WriteString(`balance ` + backEndConf.BalanceType)
+		if !strings.HasSuffix(backEndConf.BalanceType, "\n") {
+			confText.WriteString("\n")
 		}
+		confText.WriteString(backEndConf.StaticConf)
+		if !strings.HasSuffix(backEndConf.StaticConf, "\n") {
+			confText.WriteString("\n")
+		}
+		if backEndConf.ConfigType == "dynamic" {
+			res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/catalog/service/" + backEndConf.CatalogMapping)
+			if err != nil {
+				log.Println("Error getting consul list: ", err)
+			}
+			defer res.Body.Close()
+			body, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				log.Println("Error reading body: ", err)
+			}
 
-		var consulRes []ConsulServiceEntry
-		err = json.Unmarshal(body, &consulRes)
-		if err != nil {
-			log.Println("Error unmarshaling service JSON: ", err)
+			var consulRes []ConsulServiceEntry
+			err = json.Unmarshal(body, &consulRes)
+			if err != nil {
+				log.Println("Error unmarshaling service JSON: ", err)
+			}
+			for _, entry := range consulRes {
+				confText.WriteString("server " + entry.Node + " " + entry.Address + ":" + strconv.Itoa(entry.ServicePort) + " check\n")
+			}
 		}
-		for _, entry := range consulRes {
-			confText.WriteString("server " + entry.Node + " " + entry.Address + ":" + strconv.Itoa(entry.ServicePort) + " check\n")
-		}
+		confText.WriteString("\n\n")
 	}
-	confText.WriteString("\n\n")
 }
 
 func (w *Watcher) copyAndRestart() error {

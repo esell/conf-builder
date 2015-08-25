@@ -339,6 +339,7 @@ func buildMockServer(mockFail bool) *httptest.Server {
 	if !mockFail {
 		mux.HandleFunc("/v1/kv/apps/haproxy/frontend/", handleFront)
 	}
+
 	mux.HandleFunc("/v1/kv/apps/haproxy/backend/test/balance", handleBackBalance)
 	mux.HandleFunc("/v1/kv/apps/haproxy/backend/test/catalogMapping", handleBackCatalogMapping)
 	mux.HandleFunc("/v1/kv/apps/haproxy/backend/test/mode", handleFrontMode)
@@ -349,6 +350,9 @@ func buildMockServer(mockFail bool) *httptest.Server {
 	mux.HandleFunc("/v1/kv/apps/haproxy/backend/test2/mode", handleFrontMode)
 	mux.HandleFunc("/v1/kv/apps/haproxy/backend/test2/staticConf", handleBackStaticConf)
 	mux.HandleFunc("/v1/kv/apps/haproxy/backend/test2/type", handleBackType)
+	if !mockFail {
+		mux.HandleFunc("/v1/kv/apps/haproxy/backend/", handleBack)
+	}
 	mux.HandleFunc("/v1/catalog/service/test-staging", handleCatalogService)
 	l, err := net.Listen("tcp", "127.0.0.1:12424")
 
@@ -423,6 +427,12 @@ func handleFrontStaticConf(w http.ResponseWriter, r *http.Request) {
 func handleFront(w http.ResponseWriter, r *http.Request) {
 	writeHeaders(w, 200)
 	body := `["apps/haproxy/frontend/test/","apps/haproxy/frontend/test2/"]`
+	w.Write([]byte(body))
+}
+
+func handleBack(w http.ResponseWriter, r *http.Request) {
+	writeHeaders(w, 200)
+	body := `["apps/haproxy/backend/test/","apps/haproxy/backend/test2/"]`
 	w.Write([]byte(body))
 }
 
