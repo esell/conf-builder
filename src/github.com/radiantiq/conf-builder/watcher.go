@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
@@ -59,17 +60,26 @@ func (w *Watcher) watchService() {
 
 	}
 }
+func getConsulTransport() *http.Client {
+	tlsConfig := tls.Config{MaxVersion: tls.VersionTLS11, InsecureSkipVerify: true}
+	myTransport := &http.Transport{
+		DisableKeepAlives: true,
+		TLSClientConfig:   &tlsConfig,
+	}
+	return &http.Client{Transport: myTransport}
+}
 
 func (w *Watcher) getServiceIndex() error {
 	//TODO: need to be async?
 	// local chans for async GETs
 	respChan := make(chan uint64)
 	errorChan := make(chan error)
+	transClient := getConsulTransport()
 
 	// clear out previous config
 	confText.Reset()
 	go func() {
-		res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/catalog/services?index=" + strconv.Itoa(int(w.Index)))
+		res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/catalog/services?index=" + strconv.Itoa(int(w.Index)))
 
 		if err != nil {
 			log.Println("error getting service: ", err)
@@ -118,7 +128,8 @@ func (w *Watcher) getServiceIndex() error {
 }
 
 func (w *Watcher) getGlobalConfig() (globalConfig []byte, err error) {
-	res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/global")
+	transClient := getConsulTransport()
+	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/global")
 	if err != nil {
 		log.Println("error GETing consul value: ", err)
 		return nil, err
@@ -145,7 +156,8 @@ func (w *Watcher) getGlobalConfig() (globalConfig []byte, err error) {
 }
 
 func (w *Watcher) getDefaultsConfig() (defaultsConfig []byte, err error) {
-	res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/defaults")
+	transClient := getConsulTransport()
+	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/defaults")
 	if err != nil {
 		log.Println("error GETing consul value: ", err)
 		return nil, err
@@ -172,6 +184,7 @@ func (w *Watcher) getDefaultsConfig() (defaultsConfig []byte, err error) {
 }
 
 func (w *Watcher) buildConfig() error {
+	transClient := getConsulTransport()
 	// get global
 	globalConf, err := w.getGlobalConfig()
 	if err != nil {
@@ -189,7 +202,7 @@ func (w *Watcher) buildConfig() error {
 	confText.WriteString(string(defaultsConf))
 	confText.WriteString("\n\n")
 	// get all VIPs
-	res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/backend/?keys&separator=/")
+	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/backend/?keys&separator=/")
 	if err != nil {
 		log.Println("Error getting VIP list from consul: ", err)
 		// no VIPs returned but we have global/defaults we can write
@@ -275,8 +288,9 @@ func (w *Watcher) getBackendConf(name string) Backend {
 }
 
 func (w *Watcher) getConsulString(path string) string {
+	transClient := getConsulTransport()
 	result := ""
-	res, err := http.Get("http://" + w.Config.ConsulHostPort + path)
+	res, err := transClient.Get(w.Config.ConsulHostPort + path)
 	if err != nil {
 		log.Println("Error getting consul list: ", err)
 		return result
@@ -292,6 +306,7 @@ func (w *Watcher) getConsulString(path string) string {
 }
 
 func (w *Watcher) buildVipConf(vipName string) bool {
+	transClient := getConsulTransport()
 	frontEndConf := w.getFrontendConf(vipName)
 	emptyFrontEnd := Frontend{BindOptions: "", ListenPort: "", Mode: "", StaticConf: ""}
 	if frontEndConf != emptyFrontEnd {
@@ -334,7 +349,7 @@ func (w *Watcher) buildVipConf(vipName string) bool {
 			confText.WriteString("\n")
 		}
 		if backEndConf.ConfigType == "dynamic" {
-			res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/catalog/service/" + backEndConf.CatalogMapping)
+			res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/catalog/service/" + backEndConf.CatalogMapping)
 			if err != nil {
 				log.Println("Error getting consul list: ", err)
 				return false
