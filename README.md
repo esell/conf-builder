@@ -1,7 +1,16 @@
 # Conf-builder
-Builds out the HAproxy config file based on data in consul. Whenever a service change is detected a new config is created and HAproxy is reloaded.
+Builds out the HAproxy config file based on data in consul. Whenever a service change is detected a new config is created and HAproxy is reloaded.  
 
-# Configuration
+## Building  
+Conf-builder currently uses [gb](http://getgb.io/) to build although no outside libraries are needed:  
+
+	go get github.com/constabulary/gb/...
+	git clone https://github.com/radiantiq/conf-builder.git  
+	cd conf-builder  
+	gb test
+	gb build
+
+## Configuration
 Place the conf.json file in the same directory as the executable and run it, that's about it. The configurable values are: 
 
 	haproxyReloadCmd = The command used to reload/restart haproxy
@@ -11,7 +20,7 @@ Place the conf.json file in the same directory as the executable and run it, tha
 	configFile = the name/locatin of the HAproxy config file that will be output
 	tempFile = the name/location of the temp file used during the config building process
 
-# Consul layout
+## Consul layout
 
 The expected consul layout would look like:
 
