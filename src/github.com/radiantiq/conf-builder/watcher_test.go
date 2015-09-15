@@ -22,6 +22,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -146,7 +148,6 @@ func TestGetBackendConf(t *testing.T) {
 	s.Close()
 }
 
-/*
 func TestGetRestartCmd(t *testing.T) {
 
 	mockConf := Conf{ReloadCmd: "ls haproxy reload", VIPs: []string{"test"}, ConsulHostPort: "127.0.0.1:12424"}
@@ -174,7 +175,7 @@ func TestGetRestartCmd(t *testing.T) {
 
 	s.Close()
 }
-*/
+
 func TestBuildConfigNoVIP(t *testing.T) {
 	global, _ := base64.StdEncoding.DecodeString("CWxvZyAvZGV2L2xvZwlsb2NhbDAKCWxvZyAvZGV2L2xvZwlsb2NhbDEgbm90aWNlCgljaHJvb3QgL3Zhci9saWIvaGFwcm94eQoJc3RhdHMgc29ja2V0IC92YXIvbGliL2hhcHJveHkvc3RhdHMgbW9kZSA3NzcgbGV2ZWwgb3BlcmF0b3IKCXN0YXRzIHRpbWVvdXQgMzBzCgl1c2VyIGhhcHJveHkKCWdyb3VwIGhhcHJveHkKCWRhZW1vbgogICAgICAgIGxvZyAxMC4xMDAuMTMyLjIyMyBsb2NhbDIKICAgICAgICBsb2ctc2VuZC1ob3N0bmFtZQoKCSMgRGVmYXVsdCBTU0wgbWF0ZXJpYWwgbG9jYXRpb25zCgljYS1iYXNlIC9ldGMvc3NsL2NlcnRzCgljcnQtYmFzZSAvZXRjL3NzbC9wcml2YXRlCgoJIyBEZWZhdWx0IGNpcGhlcnMgdG8gdXNlIG9uIFNTTC1lbmFibGVkIGxpc3RlbmluZyBzb2NrZXRzLgoJIyBGb3IgbW9yZSBpbmZvcm1hdGlvbiwgc2VlIGNpcGhlcnMoMVNTTCkuCglzc2wtZGVmYXVsdC1iaW5kLWNpcGhlcnMga0VFQ0RIK2FSU0ErQUVTOmtSU0ErQUVTOitBRVMyNTY6UkM0LVNIQToha0VESDohTE9XOiFFWFA6IU1ENTohYU5VTEw6IWVOVUxM")
 	defaults, _ := base64.StdEncoding.DecodeString("bG9nCWdsb2JhbAp0aW1lb3V0IGNvbm5lY3QgNTAwMAp0aW1lb3V0IGNsaWVudCAgNTAwMDAKdGltZW91dCBzZXJ2ZXIgIDUwMDAw")
@@ -204,7 +205,6 @@ defaults
 	s.Close()
 }
 
-/*
 func TestBuildConfig(t *testing.T) {
 	global, _ := base64.StdEncoding.DecodeString("CWxvZyAvZGV2L2xvZwlsb2NhbDAKCWxvZyAvZGV2L2xvZwlsb2NhbDEgbm90aWNlCgljaHJvb3QgL3Zhci9saWIvaGFwcm94eQoJc3RhdHMgc29ja2V0IC92YXIvbGliL2hhcHJveHkvc3RhdHMgbW9kZSA3NzcgbGV2ZWwgb3BlcmF0b3IKCXN0YXRzIHRpbWVvdXQgMzBzCgl1c2VyIGhhcHJveHkKCWdyb3VwIGhhcHJveHkKCWRhZW1vbgogICAgICAgIGxvZyAxMC4xMDAuMTMyLjIyMyBsb2NhbDIKICAgICAgICBsb2ctc2VuZC1ob3N0bmFtZQoKCSMgRGVmYXVsdCBTU0wgbWF0ZXJpYWwgbG9jYXRpb25zCgljYS1iYXNlIC9ldGMvc3NsL2NlcnRzCgljcnQtYmFzZSAvZXRjL3NzbC9wcml2YXRlCgoJIyBEZWZhdWx0IGNpcGhlcnMgdG8gdXNlIG9uIFNTTC1lbmFibGVkIGxpc3RlbmluZyBzb2NrZXRzLgoJIyBGb3IgbW9yZSBpbmZvcm1hdGlvbiwgc2VlIGNpcGhlcnMoMVNTTCkuCglzc2wtZGVmYXVsdC1iaW5kLWNpcGhlcnMga0VFQ0RIK2FSU0ErQUVTOmtSU0ErQUVTOitBRVMyNTY6UkM0LVNIQToha0VESDohTE9XOiFFWFA6IU1ENTohYU5VTEw6IWVOVUxM")
 	defaults, _ := base64.StdEncoding.DecodeString("bG9nCWdsb2JhbAp0aW1lb3V0IGNvbm5lY3QgNTAwMAp0aW1lb3V0IGNsaWVudCAgNTAwMDAKdGltZW91dCBzZXJ2ZXIgIDUwMDAw")
@@ -288,7 +288,7 @@ server 22c8fe2e391327e0380474c608841783863160cdad50ddc174490688f588537d 10.109.1
 
 `
 
-	mockConf := Conf{ReloadCmd: "service haproxy reload", VIPs: []string{"test", "test2"}, ConsulHostPort: "127.0.0.1:12424"}
+	mockConf := Conf{ReloadCmd: "service haproxy reload", VIPs: []string{"test", "test2"}, ConsulHostPort: "http://127.0.0.1:12424", ConsulConfigPath: "/apps/haproxy"}
 	mockWatcher := Watcher{Index: 0, Config: mockConf}
 
 	s := buildMockServer(false)
@@ -305,7 +305,6 @@ server 22c8fe2e391327e0380474c608841783863160cdad50ddc174490688f588537d 10.109.1
 	confText.Reset()
 	s.Close()
 }
-*/
 
 func buildMockServer(mockFail bool) httptest.Server {
 	// Hack for go 1.5 httptest.Server() race condition
