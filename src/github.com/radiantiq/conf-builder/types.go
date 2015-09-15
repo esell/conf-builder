@@ -36,11 +36,12 @@ type ConsulServiceEntry struct {
 }
 
 type Conf struct {
-	ReloadCmd      string   `json:"haproxyReloadCmd"`
-	VIPs           []string `json:"vips"`
-	ConsulHostPort string   `json:"consulHostPort"`
-	ConfigFile     string   `json:"configFile"`
-	TempFile       string   `json:"tempFile"`
+	ReloadCmd        string   `json:"haproxyReloadCmd"`
+	VIPs             []string `json:"vips"`
+	ConsulHostPort   string   `json:"consulHostPort"`
+	ConfigFile       string   `json:"configFile"`
+	TempFile         string   `json:"tempFile"`
+	ConsulConfigPath string   `json:"consulConfigPath"`
 }
 
 type Frontend struct {

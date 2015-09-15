@@ -129,7 +129,7 @@ func (w *Watcher) getServiceIndex() error {
 
 func (w *Watcher) getGlobalConfig() (globalConfig []byte, err error) {
 	transClient := getConsulTransport()
-	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/global")
+	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv" + w.Config.ConsulConfigPath + "/global")
 	if err != nil {
 		log.Println("error GETing consul value: ", err)
 		return nil, err
@@ -157,7 +157,7 @@ func (w *Watcher) getGlobalConfig() (globalConfig []byte, err error) {
 
 func (w *Watcher) getDefaultsConfig() (defaultsConfig []byte, err error) {
 	transClient := getConsulTransport()
-	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/defaults")
+	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv" + w.Config.ConsulConfigPath + "/defaults")
 	if err != nil {
 		log.Println("error GETing consul value: ", err)
 		return nil, err
@@ -202,7 +202,7 @@ func (w *Watcher) buildConfig() error {
 	confText.WriteString(string(defaultsConf))
 	confText.WriteString("\n\n")
 	// get all VIPs
-	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv/apps/haproxy/backend/?keys&separator=/")
+	res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/kv" + w.Config.ConsulConfigPath + "/backend/?keys&separator=/")
 	if err != nil {
 		log.Println("Error getting VIP list from consul: ", err)
 		// no VIPs returned but we have global/defaults we can write
@@ -261,28 +261,28 @@ func (w *Watcher) updateConfig() error {
 
 func (w *Watcher) getFrontendConf(name string) Frontend {
 	// bindOptions
-	bindOptions := w.getConsulString("/v1/kv/apps/haproxy/frontend/" + name + "/bindOptions?raw")
+	bindOptions := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/frontend/" + name + "/bindOptions?raw")
 	// listenPort
-	listenPort := w.getConsulString("/v1/kv/apps/haproxy/frontend/" + name + "/listenPort?raw")
+	listenPort := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/frontend/" + name + "/listenPort?raw")
 	// mode
-	mode := w.getConsulString("/v1/kv/apps/haproxy/frontend/" + name + "/mode?raw")
+	mode := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/frontend/" + name + "/mode?raw")
 	// staticConf
-	staticConf := w.getConsulString("/v1/kv/apps/haproxy/frontend/" + name + "/staticConf?raw")
+	staticConf := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/frontend/" + name + "/staticConf?raw")
 
 	return Frontend{BindOptions: bindOptions, ListenPort: listenPort, Mode: mode, StaticConf: staticConf}
 }
 
 func (w *Watcher) getBackendConf(name string) Backend {
 	// balance
-	balanceType := w.getConsulString("/v1/kv/apps/haproxy/backend/" + name + "/balance?raw")
+	balanceType := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/backend/" + name + "/balance?raw")
 	// catalogMapping
-	catalogMapping := w.getConsulString("/v1/kv/apps/haproxy/backend/" + name + "/catalogMapping?raw")
+	catalogMapping := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/backend/" + name + "/catalogMapping?raw")
 	// mode
-	mode := w.getConsulString("/v1/kv/apps/haproxy/backend/" + name + "/mode?raw")
+	mode := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/backend/" + name + "/mode?raw")
 	// staticConf
-	staticConf := w.getConsulString("/v1/kv/apps/haproxy/backend/" + name + "/staticConf?raw")
+	staticConf := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/backend/" + name + "/staticConf?raw")
 	// type
-	configType := w.getConsulString("/v1/kv/apps/haproxy/backend/" + name + "/type?raw")
+	configType := w.getConsulString("/v1/kv" + w.Config.ConsulConfigPath + "/backend/" + name + "/type?raw")
 
 	return Backend{BalanceType: balanceType, CatalogMapping: catalogMapping, Mode: mode, StaticConf: staticConf, ConfigType: configType}
 }
