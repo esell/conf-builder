@@ -73,6 +73,7 @@ func (w *Watcher) getServiceIndex() error {
 
 		if err != nil {
 			log.Println("error getting service: ", err)
+			errorChan <- err
 		}
 		defer res.Body.Close()
 		log.Printf("headers: %v\n", res.Header)
@@ -212,7 +213,10 @@ func (w *Watcher) buildConfig() error {
 	for _, val := range consulRes {
 		if contains(w.Config.VIPs, filepath.Base(val)) {
 			log.Println("building ", filepath.Base(val))
-			w.buildVipConf(filepath.Base(val))
+			isSuccess := w.buildVipConf(filepath.Base(val))
+			if !isSuccess {
+				log.Println("Error building VIP config for ", filepath.Base(val))
+			}
 		}
 	}
 
@@ -287,7 +291,7 @@ func (w *Watcher) getConsulString(path string) string {
 	return result
 }
 
-func (w *Watcher) buildVipConf(vipName string) {
+func (w *Watcher) buildVipConf(vipName string) bool {
 	frontEndConf := w.getFrontendConf(vipName)
 	emptyFrontEnd := Frontend{BindOptions: "", ListenPort: "", Mode: "", StaticConf: ""}
 	if frontEndConf != emptyFrontEnd {
@@ -333,17 +337,20 @@ func (w *Watcher) buildVipConf(vipName string) {
 			res, err := http.Get("http://" + w.Config.ConsulHostPort + "/v1/catalog/service/" + backEndConf.CatalogMapping)
 			if err != nil {
 				log.Println("Error getting consul list: ", err)
+				return false
 			}
 			defer res.Body.Close()
 			body, err := ioutil.ReadAll(res.Body)
 			if err != nil {
 				log.Println("Error reading body: ", err)
+				return false
 			}
 
 			var consulRes []ConsulServiceEntry
 			err = json.Unmarshal(body, &consulRes)
 			if err != nil {
 				log.Println("Error unmarshaling service JSON: ", err)
+				return false
 			}
 			for _, entry := range consulRes {
 				confText.WriteString("server " + entry.Node + " " + entry.Address + ":" + strconv.Itoa(entry.ServicePort) + " check\n")
@@ -351,6 +358,7 @@ func (w *Watcher) buildVipConf(vipName string) {
 		}
 		confText.WriteString("\n\n")
 	}
+	return true
 }
 
 func (w *Watcher) copyAndRestart() error {
