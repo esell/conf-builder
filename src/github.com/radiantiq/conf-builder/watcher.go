@@ -80,20 +80,20 @@ func (w *Watcher) getServiceIndex() error {
 	confText.Reset()
 	go func() {
 		res, err := transClient.Get(w.Config.ConsulHostPort + "/v1/catalog/services?index=" + strconv.Itoa(int(w.Index)))
-
+		defer res.Body.Close()
 		if err != nil {
 			log.Println("error getting service: ", err)
 			errorChan <- err
+		} else {
+			log.Printf("headers: %v\n", res.Header)
+			consulModIndex, err := strconv.Atoi(res.Header["X-Consul-Index"][0])
+			if err != nil {
+				log.Println("error converting consul index: ", err)
+				errorChan <- err
+			}
+			log.Println("consul index is: ", consulModIndex)
+			respChan <- uint64(consulModIndex)
 		}
-		defer res.Body.Close()
-		log.Printf("headers: %v\n", res.Header)
-		consulModIndex, err := strconv.Atoi(res.Header["X-Consul-Index"][0])
-		if err != nil {
-			log.Println("error converting consul index: ", err)
-			errorChan <- err
-		}
-		log.Println("consul index is: ", consulModIndex)
-		respChan <- uint64(consulModIndex)
 	}()
 
 	for {
